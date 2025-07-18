@@ -1,0 +1,26 @@
+# Entorno virtual de Python
+.venv/
+venv/
+env/
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+
+# Archivos generados por PyInstaller
+dist/
+build/
+*.spec
+
+# Archivos de la base de datos y logs
+*.db
+*.sqlite
+*.log
+
+# Archivos de credenciales
+google-credentials.json
+*credentials*.json
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db

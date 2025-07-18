@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lector Inteligente</title>
+    
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+    /* 1. Definición de Variables y Fuente */
+    :root {
+        --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --primary: #4f46e5;
+        --primary-light: #eef2ff;
+        --text-main: #111827;
+        --text-muted: #6b7280;
+        --background: #f9fafb;
+        --surface: #ffffff;
+        --border: #e5e7eb;
+    }
+
+    /* 2. Estilos Base */
+    body { font-family: var(--font-sans); background-color: var(--background); color: var(--text-main); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    main { background-color: var(--surface); padding: 2rem; border-radius: 1rem; border: 1px solid var(--border); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.05); width: 95%; max-width: 1400px; display: flex; flex-direction: column; transition: all 0.3s ease-in-out; }
+    .main-expanded { height: 90vh; overflow: hidden; }
+    .hidden { display: none !important; }
+
+    /* 3. Estilos de Controles */
+    button, select, input { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.6rem 1rem; font-size: 1rem; font-family: var(--font-sans); background-color: var(--surface); transition: all 0.15s ease; }
+    button { cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
+    button:hover { background-color: #f9fafb; }
+    #audio-controls button { padding: 0.6rem; line-height: 0; }
+    
+    /* 4. Estilos Específicos de la App */
+    #drop-area {
+    border: 2px dashed var(--border);
+    border-radius: 0.75rem;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Centra verticalmente */
+    align-items: center;    /* Centra horizontalmente */
+    margin-top: 1.5rem;
+    text-align: center;      /* Asegura que el texto interno también esté centrado */
+}
+    #result-section, #vocab-view { display: flex; flex-direction: column; height: 100%; }
+    #main-view { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; flex-grow: 1; overflow: hidden; }
+    #image-container, #text-container { overflow-y: auto; border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; background-color: #fdfdfd;}
+    #text-output span.highlight { background-color: var(--primary-light); color: var(--primary); border-radius: 3px; }
+    .word-learning { background-color: #fef9c3; }
+    .word-known { background-color: #dcfce7; }
+    
+    /* --- CORRECCIÓN DEL SCROLL AQUÍ --- */
+    .vocab-table-container {
+        flex-grow: 1;
+        overflow-y: auto; /* Muestra el scrollbar cuando es necesario */
+        margin-top: 1rem;
+        min-height: 0; /* Forza el cálculo correcto de altura en flexbox */
+    }
+
+    .vocab-table { width: 100%; border-collapse: collapse; }
+    .vocab-table th, .vocab-table td { padding: 0.8rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+    .vocab-table th { background-color: var(--background); font-weight: 500; color: var(--text-muted); }
+    .status-badge { padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.8rem; color: white; font-weight: 500;}
+    .status-nueva { background-color: #60a5fa; }
+    .status-aprendiendo { background-color: #facc15; }
+    .status-conocida { background-color: #4ade80; }
+    .action-btn { background: none; border: none; padding: 0.5rem; cursor: pointer; color: var(--text-muted); }
+    .action-btn:hover { background-color: var(--background); border-radius: 50%; color: var(--text-main); }
+    .loader { border: 5px solid #f3f3f3; border-top: 5px solid var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 2rem auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    
+    /* --- CORRECCIÓN DEL OVERLAY AQUÍ --- */
+    .popup-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(17, 24, 39, 0.2); /* Un gris oscuro con baja opacidad */
+        z-index: 99;
+        /* Para desactivarlo, descomenta la siguiente línea: */
+        display: none;
+    }
+    .popup {
+        background-color: var(--surface);
+        padding: 2rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        position: relative; /* Para posicionar el botón de cerrar */
+        width: 90%;
+        max-width: 400px;
+    }
+    #popup-word {
+        margin-top: 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--primary); /* Un toque de color primario */
+        margin-bottom: 0.5rem;
+    }
+    #popup-translation {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+        margin-bottom: 1.5rem;
+    }
+    #popup-status-buttons {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+        margin-bottom: 1rem;
+    }
+    #popup-status-buttons button {
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        cursor: pointer;
+        background-color: var(--surface);
+        color: var(--text-main);
+        transition: all 0.15s ease;
+    }
+    #popup-status-buttons button.active {
+        background-color: var(--primary-light);
+        border-color: var(--primary);
+        color: var(--primary);
+        font-weight: 500;
+    }
+    #popup-status-buttons button:hover {
+        background-color: #f2f2f2;
+    }
+    #popup-close-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        border: none;
+        background: none;
+        font-size: 1.5rem;
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+    #popup-close-btn:hover {
+        color: var(--text-main);
+    }
+    </style>
+</head>
+<body>
+    <header style="position: absolute; top: 1rem; right: 2rem; z-index: 10;">
+        <button id="nav-vocab-btn">Mi Vocabulario</button>
+    </header>
+
+    <main>
+        <div id="reader-view">
+             <div id="upload-section">
+                <h1 style="font-size: 2.5rem; font-weight: bold; text-align: center; margin-bottom: 1rem;">Lector Inteligente</h1>
+                <p style="text-align: center; color: #6b7280;">Configura los idiomas y sube un archivo para empezar</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem;">
+                    <div><label for="lang-select">Idioma del Documento:</label><select id="lang-select" name="lang" style="width:100%;"></select></div>
+                    <div><label for="output-lang-select">Traducir a:</label><select id="output-lang-select" name="output_lang" style="width:100%;"></select></div>
+                </div>
+                <div id="drop-area"><p>Arrastra un archivo aquí o haz clic para seleccionar</p><input type="file" id="file-input" class="hidden" accept=".pdf,.png,.jpg,.jpeg"></div>
+                <div id="loading-spinner" class="hidden loader"></div>
+            </div>
+            <div id="result-section" class="hidden">
+                 <div id="controls-top">
+                    <button id="restart-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                        <span>Cargar Otro</span>
+                    </button>
+                    <div id="audio-controls" style="margin-left: auto; display: flex; gap: 0.5rem;">
+                        <button id="play-btn" title="Play"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></button>
+                        <button id="pause-btn" title="Pausa"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></button>
+                        <button id="stop-btn" title="Detener"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg></button>
+                    </div>
+                </div>
+                <div id="main-view"><div id="image-container"><img id="page-image-view" alt="Imagen de la página"></div><div id="text-container"><div id="text-output"></div></div></div>
+                <div id="pagination"><button id="prev-btn">Anterior</button><span id="page-label"></span><button id="next-btn">Siguiente</button></div>
+            </div>
+        </div>
+        <div id="vocab-view" class="hidden">
+            <div id="vocab-controls" style="display: flex; gap: 1rem; align-items: center;">
+                <button id="nav-reader-btn">← Volver al Lector</button>
+                <h2 style="margin: 0;">Mi Vocabulario</h2>
+                <div style="margin-left: auto; display: flex; gap: 1rem;">
+                    <input type="text" id="vocab-search-input" placeholder="Buscar palabra...">
+                    <select id="vocab-status-filter"><option value="todos">Todos los estados</option><option value="nueva">Nueva</option><option value="aprendiendo">Aprendiendo</option><option value="conocida">Conocida</option></select>
+                </div>
+            </div>
+            <div class="vocab-table-container">
+                <table class="vocab-table">
+                    <thead><tr><th>Palabra</th><th>Traducción</th><th>Idioma</th><th>Estado</th><th>Acciones</th></tr></thead>
+                    <tbody id="vocab-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="popup-overlay" class="hidden popup-overlay"></div>
+    <div id="translation-popup" class="hidden popup">
+        <h3 id="popup-word"></h3>
+        <p id="popup-translation"></p>
+        <div id="popup-status-buttons">
+            <button data-status="nueva">Nueva</button>
+            <button data-status="aprendiendo">Aprendiendo</button>
+            <button data-status="conocida">Conocida</button>
+        </div>
+        <button id="popup-close-btn">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+</button>
+    </div>
+
+    <script src="/static/main.js"></script>
+</body>
+</html>
