@@ -144,6 +144,11 @@
     #popup-close-btn:hover {
         color: var(--text-main);
     }
+
+    #context-section { margin-top: 1.5rem; text-align: left; }
+    .sentence-label { font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem; font-size: 0.9rem; }
+    .sentence-context { font-style: italic; background-color: var(--background); padding: 0.75rem; border-radius: 0.5rem; margin-top: 0; }
+
     </style>
 </head>
 <body>
@@ -207,18 +212,24 @@
     </main>
 
     <div id="popup-overlay" class="hidden popup-overlay"></div>
-    <div id="translation-popup" class="hidden popup">
-        <h3 id="popup-word"></h3>
-        <p id="popup-translation"></p>
-        <div id="popup-status-buttons">
-            <button data-status="nueva">Nueva</button>
-            <button data-status="aprendiendo">Aprendiendo</button>
-            <button data-status="conocida">Conocida</button>
-        </div>
-        <button id="popup-close-btn">
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-</button>
+<div id="translation-popup" class="hidden popup">
+    <button id="popup-close-btn">&times;</button>
+    <h3 id="popup-word"></h3>
+    <p id="popup-translation"></p>
+    
+    <div id="context-section" class="hidden">
+        <hr style="margin: 1rem 0;">
+        <p class="sentence-label">Frase de Origen:</p>
+        <p id="popup-source-sentence" class="sentence-context"></p>
+        <p class="sentence-label">Traducción de la Frase:</p>
+        <p id="popup-translated-sentence" class="sentence-context"></p>
     </div>
+    <div id="popup-status-buttons">
+        <button data-status="nueva">Nueva</button>
+        <button data-status="aprendiendo">Aprendiendo</button>
+        <button data-status="conocida">Conocida</button>
+    </div>
+</div>
 
     <script src="/static/main.js"></script>
 </body>

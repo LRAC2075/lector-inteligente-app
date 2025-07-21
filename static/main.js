@@ -223,7 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    words: uniqueWords, 
+                    words: uniqueWords,
+                    source_lang: refs.langSelect.value, // <-- Enviar idioma de origen
                     target_lang: refs.outputLangSelect.value 
                 })
             });
@@ -283,45 +284,51 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ----------- Gestión de Vocabulario -----------
+
     const loadAndRenderVocabulary = async () => {
-        const status = refs.vocabStatusFilter.value;
-        refs.vocabTableBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`;
+    const status = refs.vocabStatusFilter.value;
+    refs.vocabTableBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`;
+    
+    try {
+        const response = await fetch(`/get_vocabulary?status=${status}`);
+        const vocabulary = await response.json();
+        refs.vocabTableBody.innerHTML = '';
         
-        try {
-            const response = await fetch(`/get_vocabulary?status=${status}`);
-            const vocabulary = await response.json();
-            refs.vocabTableBody.innerHTML = '';
-            
-            if (vocabulary.length === 0) {
-                refs.vocabTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay palabras.</td></tr>`;
-                return;
-            }
-            
-            vocabulary.forEach(word => {
-                const row = document.createElement('tr');
-                row.dataset.word = word.word_text;
-                row.dataset.lang = word.target_language;
-                
-                const statusClass = `status-${word.learning_status}`;
-                row.innerHTML = `
-                    <td>${word.word_text}</td>
-                    <td>${word.translation}</td>
-                    <td>${word.target_language.toUpperCase()}</td>
-                    <td><span class="status-badge ${statusClass}">${word.learning_status}</span></td>
-                    <td>
-                        <button class="action-btn" data-action="edit">✏️</button>
-                        <button class="action-btn" data-action="delete">🗑️</button>
-                    </td>
-                `;
-                
-                refs.vocabTableBody.appendChild(row);
-            });
-            
-            filterVocabularyTable();
-        } catch (e) {
-            refs.vocabTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Error al cargar.</td></tr>`;
+        if (vocabulary.length === 0) {
+            refs.vocabTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay palabras.</td></tr>`;
+            return;
         }
-    };
+        
+        vocabulary.forEach(word => {
+            const row = document.createElement('tr');
+            // Guardar todos los identificadores en la fila
+            row.dataset.word = word.word_text;
+            row.dataset.sourceLang = word.source_language;
+            row.dataset.targetLang = word.target_language;
+            
+            const statusClass = `status-${word.learning_status}`;
+            // MODIFICADO: Mostrar ambos idiomas
+            const langDisplay = `${word.source_language.toUpperCase()} → ${word.target_language.toUpperCase()}`;
+            
+            row.innerHTML = `
+                <td>${word.word_text}</td>
+                <td>${word.translation}</td>
+                <td>${langDisplay}</td>
+                <td><span class="status-badge ${statusClass}">${word.learning_status}</span></td>
+                <td>
+                    <button class="action-btn" data-action="edit">✏️</button>
+                    <button class="action-btn" data-action="delete">🗑️</button>
+                </td>
+            `;
+            
+            refs.vocabTableBody.appendChild(row);
+        });
+        
+        filterVocabularyTable();
+    } catch (e) {
+        refs.vocabTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Error al cargar.</td></tr>`;
+    }
+};
 
     const filterVocabularyTable = () => {
         const searchTerm = refs.vocabSearchInput.value.trim().toLowerCase();
@@ -411,66 +418,102 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ----------- Traducción y Popup -----------
-    const onWordClick = async (spanElement) => {
-        const cleanWord = spanElement.textContent.replace(/[.,:;!?]$/, '').trim().toLowerCase();
-        if (!cleanWord) return;
-        
-        refs.popupStatusButtons.dataset.currentWord = cleanWord;
-        refs.popupStatusButtons.dataset.currentSpanIndex = Array.from(
-            refs.textOutput.querySelectorAll('span')
-        ).indexOf(spanElement);
-        
-        showPopup('Traduciendo...');
-        
-        try {
-            const response = await fetch('/translate', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ 
-                    word: cleanWord, 
-                    target_lang: refs.outputLangSelect.value 
-                })
-            });
-            
-            const data = await response.json();
-            if (data.error) {
-                updatePopupContent(`Error: ${data.error}`);
-            } else {
-                updatePopupContent(data.translation, cleanWord, data.status);
-            }
-        } catch (e) {
-            updatePopupContent(`Error de red: ${e.message}`);
-        }
-    };
 
-    const handleStatusChange = async (event) => {
-        const button = event.target.closest('button');
-        if (!button) return;
-        
-        const newStatus = button.dataset.status;
-        const word = refs.popupStatusButtons.dataset.currentWord;
-        const spanIndex = parseInt(refs.popupStatusButtons.dataset.currentSpanIndex, 10);
-        
-        try {
-            const response = await fetch('/update_word_status', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ 
-                    word, 
-                    target_lang: refs.outputLangSelect.value, 
-                    status: newStatus 
-                })
-            });
-            
-            if (response.ok) {
-                showToast(`'${word}' marcada como '${newStatus}'`, 'info');
-                updateActiveButton(newStatus);
-                updateWordSpanClass(spanIndex, newStatus);
-            }
-        } catch (e) {
-            console.error("Error al actualizar el estado:", e);
+const onWordClick = async (spanElement) => {
+    const cleanWord = spanElement.textContent.replace(/[.,:;!?]$/, '').trim();
+    if (!cleanWord) return;
+
+    // --- LÓGICA PARA ENCONTRAR LA FRASE COMPLETA ---
+    let fullSentence = '';
+    // Reconstruimos la frase a partir de los nodos de texto y spans alrededor del clicado
+    let currentNode = spanElement;
+    let sentenceParts = [spanElement.textContent];
+    
+    // Hacia atrás hasta encontrar un punto
+    while ((currentNode = currentNode.previousSibling)) {
+        if (currentNode.textContent.includes('.')) {
+            sentenceParts.unshift(currentNode.textContent.split('.').pop());
+            break;
         }
-    };
+        sentenceParts.unshift(currentNode.textContent);
+    }
+    
+    // Hacia adelante hasta encontrar un punto
+    currentNode = spanElement;
+    while ((currentNode = currentNode.nextSibling)) {
+        sentenceParts.push(currentNode.textContent);
+        if (currentNode.textContent.includes('.')) {
+            break;
+        }
+    }
+    fullSentence = sentenceParts.join('').trim();
+    // --- FIN DE LA LÓGICA DE LA FRASE ---
+
+    const sourceLang = refs.langSelect.value;
+    
+    refs.popupStatusButtons.dataset.currentWord = cleanWord.toLowerCase();
+    refs.popupStatusButtons.dataset.currentSourceLang = sourceLang;
+    refs.popupStatusButtons.dataset.currentSpanIndex = Array.from(
+        refs.textOutput.querySelectorAll('span')
+    ).indexOf(spanElement);
+    
+    showPopup('Traduciendo...');
+    
+    try {
+        const response = await fetch('/translate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                word: cleanWord, 
+                sentence: fullSentence, // <-- ENVIAMOS LA FRASE COMPLETA
+                source_lang: sourceLang,
+                target_lang: refs.outputLangSelect.value 
+            })
+        });
+        
+        const data = await response.json();
+        if (data.error) {
+            updatePopupContent(`Error: ${data.error}`);
+        } else {
+            // Pasamos los nuevos datos a la función que actualiza el popup
+            updatePopupContent(data.translation, cleanWord, data.status, data.source_sentence, data.translated_sentence);
+        }
+    } catch (e) {
+        updatePopupContent(`Error de red: ${e.message}`);
+    }
+};
+
+
+const handleStatusChange = async (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    
+    const newStatus = button.dataset.status;
+    const word = refs.popupStatusButtons.dataset.currentWord;
+    const sourceLang = refs.popupStatusButtons.dataset.currentSourceLang; // <-- Obtener idioma de origen
+    const spanIndex = parseInt(refs.popupStatusButtons.dataset.currentSpanIndex, 10);
+    
+    try {
+        const response = await fetch('/update_word_status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                word,
+                source_lang: sourceLang, // <-- Enviar idioma de origen
+                target_lang: refs.outputLangSelect.value, 
+                status: newStatus 
+            })
+        });
+        
+        if (response.ok) {
+            showToast(`'${word}' marcada como '${newStatus}'`, 'info');
+            updateActiveButton(newStatus);
+            updateWordSpanClass(spanIndex, newStatus);
+        }
+    } catch (e) {
+        console.error("Error al actualizar el estado:", e);
+    }
+};
 
     const showPopup = (content) => {
         updatePopupContent(content);
@@ -483,10 +526,23 @@ document.addEventListener('DOMContentLoaded', () => {
         refs.translationPopup.classList.add('hidden');
     };
 
-    const updatePopupContent = (translation, word = '', status = '') => {
+    const updatePopupContent = (translation, word = '', status = '', sourceSentence = '', translatedSentence = '') => {
         refs.popupWord.textContent = word;
         refs.popupTranslation.textContent = translation || 'N/A';
         if (status) updateActiveButton(status);
+
+        const contextSection = document.getElementById('context-section');
+        const popupSourceSentence = document.getElementById('popup-source-sentence');
+        const popupTranslatedSentence = document.getElementById('popup-translated-sentence');
+
+        // Muestra la sección de contexto solo si tenemos las frases
+        if (sourceSentence && translatedSentence) {
+            popupSourceSentence.textContent = sourceSentence;
+            popupTranslatedSentence.textContent = translatedSentence;
+            contextSection.classList.remove('hidden');
+        } else {
+            contextSection.classList.add('hidden');
+        }
     };
 
     const updateActiveButton = (activeStatus) => {
