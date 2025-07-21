@@ -107,7 +107,8 @@ def get_vocabulary_status():
 def get_vocabulary():
     try:
         status_filter = request.args.get('status', None)
-        vocab_list = database_engine.get_all_vocabulary(status_filter)
+        lang_filter = request.args.get('lang', None) # <-- Recibimos el nuevo filtro
+        vocab_list = database_engine.get_all_vocabulary(status_filter, lang_filter)
         return jsonify(vocab_list)
     except Exception as e:
         app.logger.error(f"Error en /get_vocabulary: {e}", exc_info=True)

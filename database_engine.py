@@ -57,20 +57,29 @@ def get_statuses_for_words(words, source_lang, target_lang):
         cursor.execute(query, params)
         return {row[0]: row[1] for row in cursor.fetchall()}
 
-def get_all_vocabulary(status_filter=None):
+def get_all_vocabulary(status_filter=None, lang_filter=None):
     with sqlite3.connect(DB_FILE) as conn:
-        # Hacemos que la conexión devuelva filas que se comportan como diccionarios
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
+        params = []
         query = "SELECT word_text, source_language, target_language, translation, learning_status FROM vocabulary"
+        conditions = []
+
         if status_filter and status_filter != 'todos':
-            query += " WHERE learning_status = ?"
-            cursor.execute(query, (status_filter,))
-        else:
-            cursor.execute(query)
+            conditions.append("learning_status = ?")
+            params.append(status_filter)
         
-        # Convertimos las filas a diccionarios estándar para devolver JSON
+        if lang_filter and lang_filter != 'todos':
+            # El formato del filtro será "ko-es", "ja-es", etc.
+            source, target = lang_filter.split('-')
+            conditions.append("source_language = ? AND target_language = ?")
+            params.extend([source, target])
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
 
 def edit_word_translation(word, source_lang, target_lang, new_translation):

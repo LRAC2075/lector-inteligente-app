@@ -222,12 +222,29 @@
                 <h2 style="margin: 0;">Mi Vocabulario</h2>
                 <div style="margin-left: auto; display: flex; gap: 1rem;">
                     <input type="text" id="vocab-search-input" placeholder="Buscar palabra...">
-                    <select id="vocab-status-filter"><option value="todos">Todos los estados</option><option value="nueva">Nueva</option><option value="aprendiendo">Aprendiendo</option><option value="conocida">Conocida</option></select>
+                    <select id="vocab-lang-filter">
+                        <option value="todos">Todos los idiomas</option>
+                    </select>
+                    <select id="vocab-status-filter">
+                        <option value="todos">Todos los estados</option>
+                        <option value="nueva">Nueva</option>
+                        <option value="aprendiendo">Aprendiendo</option>
+                        <option value="conocida">Conocida</option>
+                    </select>
                 </div>
             </div>
+
             <div class="vocab-table-container">
                 <table class="vocab-table">
-                    <thead><tr><th>Palabra</th><th>Traducción</th><th>Idioma</th><th>Estado</th><th>Acciones</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>Palabra</th>
+                            <th>Traducción</th>
+                            <th>Idioma</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
                     <tbody id="vocab-table-body"></tbody>
                 </table>
             </div>

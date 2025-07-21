@@ -370,49 +370,66 @@ document.addEventListener('DOMContentLoaded', () => {
     // ----------- Gestión de Vocabulario -----------
 
     const loadAndRenderVocabulary = async () => {
-    const status = refs.vocabStatusFilter.value;
-    refs.vocabTableBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`;
-    
-    try {
-        const response = await fetch(`/get_vocabulary?status=${status}`);
-        const vocabulary = await response.json();
-        refs.vocabTableBody.innerHTML = '';
+        const status = refs.vocabStatusFilter.value;
+        const langFilter = document.getElementById('vocab-lang-filter').value; // <-- Obtenemos el valor del nuevo filtro
+
+        refs.vocabTableBody.innerHTML = `<tr><td colspan="5">Cargando...</td></tr>`;
         
-        if (vocabulary.length === 0) {
-            refs.vocabTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay palabras.</td></tr>`;
-            return;
+        try {
+            // Añadimos el nuevo parámetro 'lang' a la URL de la petición
+            const response = await fetch(`/get_vocabulary?status=${status}&lang=${langFilter}`);
+            const vocabulary = await response.json();
+            
+            // --- LÓGICA PARA POBLAR EL FILTRO DE IDIOMAS ---
+            const langSelect = document.getElementById('vocab-lang-filter');
+            const existingLangPairs = new Set(Array.from(langSelect.options).map(opt => opt.value));
+            
+            vocabulary.forEach(word => {
+                const langPair = `${word.source_language}-${word.target_language}`;
+                if (!existingLangPairs.has(langPair)) {
+                    const option = document.createElement('option');
+                    option.value = langPair;
+                    option.textContent = `${word.source_language.toUpperCase()} → ${word.target_language.toUpperCase()}`;
+                    langSelect.appendChild(option);
+                    existingLangPairs.add(langPair);
+                }
+            });
+            // --- FIN DE LA LÓGICA ---
+
+            refs.vocabTableBody.innerHTML = '';
+            
+            if (vocabulary.length === 0) {
+                refs.vocabTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay palabras para este filtro.</td></tr>`;
+                return;
+            }
+            
+            vocabulary.forEach(word => {
+                const row = document.createElement('tr');
+                row.dataset.word = word.word_text;
+                row.dataset.sourceLang = word.source_language;
+                row.dataset.targetLang = word.target_language;
+                
+                const statusClass = `status-${word.learning_status}`;
+                const langDisplay = `${word.source_language.toUpperCase()} → ${word.target_language.toUpperCase()}`;
+                
+                row.innerHTML = `
+                    <td>${word.word_text}</td>
+                    <td>${word.translation}</td>
+                    <td>${langDisplay}</td>
+                    <td><span class="status-badge ${statusClass}">${word.learning_status}</span></td>
+                    <td>
+                        <button class="action-btn" data-action="edit">✏️</button>
+                        <button class="action-btn" data-action="delete">🗑️</button>
+                    </td>
+                `;
+                refs.vocabTableBody.appendChild(row);
+            });
+            
+            filterVocabularyTable();
+        } catch (e) {
+            refs.vocabTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Error al cargar.</td></tr>`;
         }
-        
-        vocabulary.forEach(word => {
-            const row = document.createElement('tr');
-            // Guardar todos los identificadores en la fila
-            row.dataset.word = word.word_text;
-            row.dataset.sourceLang = word.source_language;
-            row.dataset.targetLang = word.target_language;
-            
-            const statusClass = `status-${word.learning_status}`;
-            // MODIFICADO: Mostrar ambos idiomas
-            const langDisplay = `${word.source_language.toUpperCase()} → ${word.target_language.toUpperCase()}`;
-            
-            row.innerHTML = `
-                <td>${word.word_text}</td>
-                <td>${word.translation}</td>
-                <td>${langDisplay}</td>
-                <td><span class="status-badge ${statusClass}">${word.learning_status}</span></td>
-                <td>
-                    <button class="action-btn" data-action="edit">✏️</button>
-                    <button class="action-btn" data-action="delete">🗑️</button>
-                </td>
-            `;
-            
-            refs.vocabTableBody.appendChild(row);
-        });
-        
-        filterVocabularyTable();
-    } catch (e) {
-        refs.vocabTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Error al cargar.</td></tr>`;
-    }
-};
+    };
 
     const filterVocabularyTable = () => {
         const searchTerm = refs.vocabSearchInput.value.trim().toLowerCase();
@@ -812,6 +829,8 @@ const handleStatusChange = async (event) => {
             state.synth.speak(utterance);
         }
     };
+
+    document.getElementById('vocab-lang-filter').onchange = loadAndRenderVocabulary;
 
     // ====================
     // 5. INICIALIZACIÓN
