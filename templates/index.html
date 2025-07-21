@@ -145,6 +145,35 @@
         color: var(--text-main);
     }
 
+    .popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem; /* Espacio entre la palabra y el botón */
+    }
+
+    #popup-word {
+        margin: 0; /* Quitamos márgenes extra para un mejor alineamiento */
+    }
+
+    .button-primary {
+        background-color: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    .button-primary:hover {
+        background-color: #4338ca; /* Un poco más oscuro */
+    }
+    .button-secondary {
+        background-color: transparent;
+        color: var(--text-muted);
+        border-color: var(--border);
+    }
+    .button-secondary:hover {
+        background-color: var(--background);
+        color: var(--text-main);
+    }
+
     #context-section { margin-top: 1.5rem; text-align: left; }
     .sentence-label { font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem; font-size: 0.9rem; }
     .sentence-context { font-style: italic; background-color: var(--background); padding: 0.75rem; border-radius: 0.5rem; margin-top: 0; }
@@ -208,7 +237,12 @@
     <div id="popup-overlay" class="hidden popup-overlay"></div>
 <div id="translation-popup" class="hidden popup">
     <button id="popup-close-btn">&times;</button>
-    <h3 id="popup-word"></h3>
+    
+    <div class="popup-header">
+        <h3 id="popup-word"></h3>
+        <button id="popup-speak-btn" class="action-btn" title="Escuchar pronunciación">🔊</button>
+    </div>
+
     <p id="popup-translation"></p>
     
     <div id="context-section" class="hidden">
@@ -222,6 +256,15 @@
         <button data-status="nueva">Nueva</button>
         <button data-status="aprendiendo">Aprendiendo</button>
         <button data-status="conocida">Conocida</button>
+    </div>
+</div>
+<div id="custom-confirm-overlay" class="hidden popup-overlay"></div>
+<div id="custom-confirm-modal" class="hidden popup">
+    <h3 style="margin-top:0;">Confirmación</h3>
+    <p id="custom-confirm-msg">Mensaje de confirmación aquí.</p>
+    <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
+        <button id="confirm-cancel-btn" class="button-secondary">Cancelar</button>
+        <button id="confirm-ok-btn" class="button-primary">Continuar</button>
     </div>
 </div>
 

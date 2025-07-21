@@ -71,6 +71,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }).showToast();
     };
 
+    const showCustomConfirm = (message) => {
+        return new Promise((resolve, reject) => {
+            const overlay = document.getElementById('custom-confirm-overlay');
+            const modal = document.getElementById('custom-confirm-modal');
+            const msgElement = document.getElementById('custom-confirm-msg');
+            const okBtn = document.getElementById('confirm-ok-btn');
+            const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+            msgElement.textContent = message;
+            overlay.classList.remove('hidden');
+            modal.classList.remove('hidden');
+
+            // Creamos funciones para limpiar y resolver/rechazar
+            const cleanupAndResolve = () => {
+                overlay.classList.add('hidden');
+                modal.classList.add('hidden');
+                okBtn.onclick = null;
+                cancelBtn.onclick = null;
+                resolve();
+            };
+
+            const cleanupAndReject = () => {
+                overlay.classList.add('hidden');
+                modal.classList.add('hidden');
+                okBtn.onclick = null;
+                cancelBtn.onclick = null;
+                reject();
+            };
+
+            okBtn.onclick = cleanupAndResolve;
+            cancelBtn.onclick = cleanupAndReject;
+        });
+    };
+
     // -------------- Gestión de Vistas --------------
     const showReaderView = () => {
         refs.vocabView.classList.add('hidden');
@@ -196,26 +230,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // ----------- Procesamiento de Archivos -----------
     const handleFile = async (file) => {
         if (!file) return;
- 
-        // Comprobamos si los idiomas de origen y destino son iguales.
+
         const sourceLangBase = refs.langSelect.value.split('-')[0];
         const targetLangBase = refs.outputLangSelect.value;
 
         if (sourceLangBase === targetLangBase) {
             const langName = refs.outputLangSelect.options[refs.outputLangSelect.selectedIndex].text;
-            const proceed = confirm(
-                `El idioma del documento y el de traducción son el mismo (${langName}).\n\n` +
-                `¿Estás seguro de que quieres continuar?\n` +
-                `(Esto es útil para añadir palabras a tu vocabulario en el mismo idioma).`
-            );
+            const message = `El idioma del documento y el de traducción son el mismo (${langName}).\n\n¿Deseas continuar? (Esto es útil para añadir palabras a tu vocabulario en el mismo idioma).`;
             
-            if (!proceed) {
-                // Si el usuario cancela, detenemos el proceso.
-                refs.fileInput.value = ''; // Limpiamos la selección de archivo.
-                return; 
+            try {
+                // Usamos 'await' para esperar a que el usuario haga clic en "Continuar"
+                await showCustomConfirm(message);
+            } catch {
+                // El usuario hizo clic en "Cancelar" o cerró el modal
+                refs.fileInput.value = '';
+                return; // Detenemos la ejecución
             }
         }
 
+        // Si el usuario confirma (o los idiomas son diferentes), el resto del código se ejecuta.
         refs.dropArea.classList.add('hidden');
         refs.loadingSpinner.classList.remove('hidden');
         
@@ -764,6 +797,21 @@ const handleStatusChange = async (event) => {
     refs.playBtn.onclick = playTTS;
     refs.pauseBtn.onclick = pauseTTS;
     refs.stopBtn.onclick = stopTTS;
+
+    // --- NUEVO EVENTO PARA EL BOTÓN DE VOZ DEL POPUP ---
+    document.getElementById('popup-speak-btn').onclick = () => {
+        const wordToSpeak = refs.popupWord.textContent;
+        const sourceLang = refs.popupStatusButtons.dataset.currentSourceLang;
+
+        if (wordToSpeak && sourceLang) {
+            // Detenemos cualquier audio que se esté reproduciendo
+            state.synth.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(wordToSpeak);
+            utterance.lang = sourceLang;
+            state.synth.speak(utterance);
+        }
+    };
 
     // ====================
     // 5. INICIALIZACIÓN
