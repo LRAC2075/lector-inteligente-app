@@ -113,31 +113,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ----------- Inicialización -----------
     const populateVoiceList = () => {
-        // 1. Guardar los idiomas que ya existen en el HTML para evitar duplicados.
-        const existingLangs = new Set();
-        refs.langSelect.querySelectorAll('option').forEach(option => {
-            existingLangs.add(option.value);
-        });
+        // 1. Definimos nuestros idiomas prioritarios y CJK
+        const priorityLangs = [
+            { code: 'es-ES', name: 'Español' },
+            { code: 'en-US', name: 'Inglés (EEUU)' },
+            { code: 'ja', name: 'Japonés' },
+            { code: 'zh-CN', name: 'Chino (Simplificado)' },
+            { code: 'ko', name: 'Coreano' }
 
+        ];
+
+        // 2. Detectamos el idioma del navegador del usuario
+        const userLang = navigator.language || navigator.userLanguage; // ej: "es-PE" o "en-US"
+        
         const voices = state.synth.getVoices();
-        
-        if (voices.length === 0 && refs.langSelect.options.length === 0) {
-            refs.langSelect.innerHTML = '<option>No se encontraron voces</option>';
-            return;
+        refs.langSelect.innerHTML = ''; // Limpiamos el dropdown
+
+        const addedLangs = new Set();
+        let bestOptionForUser = null;
+
+        // Función para añadir una opción al select
+        const addOption = (value, text) => {
+            if (addedLangs.has(value.split('-')[0])) return; // Evita duplicados de base (ej: no añadir es-MX si ya está es-ES)
+            
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            refs.langSelect.appendChild(option);
+            addedLangs.add(value.split('-')[0]);
+        };
+
+        // 3. Buscamos la voz exacta del usuario y la añadimos primero
+        const userVoice = voices.find(voice => voice.lang === userLang);
+        if (userVoice) {
+            addOption(userVoice.lang, `${userVoice.name} (${userVoice.lang})`);
+            bestOptionForUser = userVoice.lang;
         }
-        
-        voices.forEach(voice => {
-            // 2. Comprobar si el idioma de esta voz ya fue añadido.
-            if (!existingLangs.has(voice.lang)) {
-                const option = document.createElement('option');
-                option.textContent = `${voice.name} (${voice.lang})`;
-                option.value = voice.lang;
-                refs.langSelect.appendChild(option);
-                // 3. Añadir el nuevo idioma al set para no repetirlo con otra voz.
-                existingLangs.add(voice.lang);
+
+        // 4. Añadimos nuestros idiomas prioritarios (si no se han añadido ya)
+        priorityLangs.forEach(lang => {
+            addOption(lang.code, lang.name);
+            // Si el idioma del usuario coincide con uno de nuestros prioritarios, lo marcamos para seleccionarlo
+            if (!bestOptionForUser && userLang.startsWith(lang.code.split('-')[0])) {
+                bestOptionForUser = lang.code;
             }
         });
+
+        // 5. Añadimos el resto de voces del sistema
+        voices.forEach(voice => {
+            addOption(voice.lang, `${voice.name} (${voice.lang})`);
+        });
+
+        // 6. Pre-seleccionamos la mejor opción para el usuario
+        if (bestOptionForUser) {
+            refs.langSelect.value = bestOptionForUser;
+        }
     };
+
 
     const populateTranslationLanguages = async () => {
         try {
@@ -164,7 +196,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // ----------- Procesamiento de Archivos -----------
     const handleFile = async (file) => {
         if (!file) return;
-        
+ 
+        // Comprobamos si los idiomas de origen y destino son iguales.
+        const sourceLangBase = refs.langSelect.value.split('-')[0];
+        const targetLangBase = refs.outputLangSelect.value;
+
+        if (sourceLangBase === targetLangBase) {
+            const langName = refs.outputLangSelect.options[refs.outputLangSelect.selectedIndex].text;
+            const proceed = confirm(
+                `El idioma del documento y el de traducción son el mismo (${langName}).\n\n` +
+                `¿Estás seguro de que quieres continuar?\n` +
+                `(Esto es útil para añadir palabras a tu vocabulario en el mismo idioma).`
+            );
+            
+            if (!proceed) {
+                // Si el usuario cancela, detenemos el proceso.
+                refs.fileInput.value = ''; // Limpiamos la selección de archivo.
+                return; 
+            }
+        }
+
         refs.dropArea.classList.add('hidden');
         refs.loadingSpinner.classList.remove('hidden');
         
