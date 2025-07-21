@@ -15,7 +15,8 @@
     <style>
     /* 1. Definición de Variables y Fuente */
     :root {
-        --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        /* Se añaden las fuentes Noto Sans al inicio de la pila */
+        --font-sans: "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         --primary: #4f46e5;
         --primary-light: #eef2ff;
         --text-main: #111827;
@@ -24,7 +25,6 @@
         --surface: #ffffff;
         --border: #e5e7eb;
     }
-
     /* 2. Estilos Base */
     body { font-family: var(--font-sans); background-color: var(--background); color: var(--text-main); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
     main { background-color: var(--surface); padding: 2rem; border-radius: 1rem; border: 1px solid var(--border); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.05); width: 95%; max-width: 1400px; display: flex; flex-direction: column; transition: all 0.3s ease-in-out; }
@@ -153,11 +153,20 @@
 
     <main>
         <div id="reader-view">
-             <div id="upload-section">
+            <div id="upload-section">
                 <h1 style="font-size: 2.5rem; font-weight: bold; text-align: center; margin-bottom: 1rem;">Lector Inteligente</h1>
                 <p style="text-align: center; color: #6b7280;">Configura los idiomas y sube un archivo para empezar</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem;">
-                    <div><label for="lang-select">Idioma del Documento:</label><select id="lang-select" name="lang" style="width:100%;"></select></div>
+                    <div>
+                        <label for="lang-select">Idioma del Documento:</label>
+                        <select id="lang-select" name="lang" style="width:100%;">
+                            <option value="zh-CN">Chino (Simplificado)</option>
+                            <option value="ja">Japonés</option>
+                            <option value="ko">Coreano</option>
+                            <option value="es-ES">Español</option>
+                            <option value="en-US">Inglés (EEUU)</option>
+                            </select>
+                    </div>
                     <div><label for="output-lang-select">Traducir a:</label><select id="output-lang-select" name="output_lang" style="width:100%;"></select></div>
                 </div>
                 <div id="drop-area"><p>Arrastra un archivo aquí o haz clic para seleccionar</p><input type="file" id="file-input" class="hidden" accept=".pdf,.png,.jpg,.jpeg"></div>

@@ -2,7 +2,7 @@ import os
 import io
 import base64
 import re
-import sys  # <-- 1. Importar sys
+import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from flask import Flask, request, jsonify, render_template
@@ -12,6 +12,20 @@ from pdf2image import convert_from_bytes
 from google.cloud import vision
 from google.cloud import translate_v2 as translate
 import database_engine
+
+# --- AÑADIR IMPORTS PARA TOKENIZACIÓN CJK ---
+try:
+    import jieba
+    from janome.tokenizer import Tokenizer as JanomeTokenizer
+    from konlpy.tag import Okt
+    CJK_LIBRARIES_LOADED = True
+    # Inicializar tokenizers una vez para mejorar el rendimiento
+    janome_tokenizer = JanomeTokenizer()
+    okt_tokenizer = Okt()
+except ImportError as e:
+    CJK_LIBRARIES_LOADED = False
+    print(f"ADVERTENCIA: No se pudieron cargar las librerías CJK. Funcionalidad limitada. Error: {e}")
+# ----------------------------------------------
 
 # --- 2. FUNCIÓN PARA OBTENER RUTAS DE ARCHIVOS ---
 def resource_path(relative_path):
@@ -119,23 +133,62 @@ def process_file():
         file = request.files.get('file')
         source_lang = request.form.get('source_lang', 'en-US')
         if not file: return jsonify({'error': 'No se recibió ningún archivo.'}), 400
+        
         vision_client = vision.ImageAnnotatorClient()
         response_pages = []
         file_bytes = file.read()
+        
+        # Obtener código de idioma base (ej: 'en', 'ja')
         lang_code = source_lang.split('-')[0]
         image_context = vision.ImageContext(language_hints=[lang_code])
+        
         images_from_file = convert_from_bytes(file_bytes, dpi=200) if file.filename.lower().endswith('.pdf') else [Image.open(io.BytesIO(file_bytes))]
+
         for img in images_from_file:
             with io.BytesIO() as output:
                 img.save(output, format="PNG")
                 content = output.getvalue()
+            
             image = vision.Image(content=content)
             response = vision_client.document_text_detection(image=image, image_context=image_context)
-            if response.error.message: raise Exception(response.error.message)
-            response_pages.append({'text': response.full_text_annotation.text, 'image_b64': base64.b64encode(content).decode('utf-8')})
+            if response.error.message: raise Exception(f"Error de Google Vision: {response.error.message}")
+            
+            full_text = response.full_text_annotation.text
+            text_data = {}
+
+            # Lógica de tokenización CJK
+            if CJK_LIBRARIES_LOADED and lang_code in ['zh', 'ja', 'ko']:
+                tokens = []
+                if lang_code == 'zh':
+                    tokens = list(jieba.cut(full_text))
+                elif lang_code == 'ja':
+                    tokens = [token.surface for token in janome_tokenizer.tokenize(full_text)]
+                elif lang_code == 'ko':
+                    tokens = okt_tokenizer.morphs(full_text)
+                
+                # Filtrar tokens vacíos o de solo espacios
+                tokens = [token for token in tokens if token.strip()]
+
+                text_data = {
+                    "type": "tokenized",
+                    "tokens": tokens
+                }
+            else:
+                # Lógica para idiomas no CJK (basados en espacios)
+                text_data = {
+                    "type": "plain",
+                    "text": full_text
+                }
+            
+            response_pages.append({
+                'full_text': full_text,  # Texto completo para TTS
+                'text_data': text_data,  # Texto procesado para renderizar
+                'image_b64': base64.b64encode(content).decode('utf-8')
+            })
+            
         return jsonify({'pages': response_pages})
     except Exception as e:
-        app.logger.error(f"Error en /process: {e}", exc_info=True) # <-- LOGGING AÑADIDO
+        app.logger.error(f"Error en /process: {e}", exc_info=True)
         return jsonify({'error': f'Error del servidor: {e.__class__.__name__}'}), 500
 
 @app.route('/translate', methods=['POST'])

@@ -102,7 +102,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         stopTTS();
         const page = state.documentPages[state.currentPageIndex];
-        await renderInteractiveText(page.text);
+        // MODIFICADO: Pasar el objeto text_data en lugar de una cadena de texto
+        await renderInteractiveText(page.text_data); 
         
         refs.pageImage.src = `data:image/png;base64,${page.image_b64}`;
         refs.pageLabel.textContent = `Página ${state.currentPageIndex + 1} de ${state.documentPages.length}`;
@@ -112,8 +113,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ----------- Inicialización -----------
     const populateVoiceList = () => {
+        // 1. Guardar los idiomas que ya existen en el HTML para evitar duplicados.
+        const existingLangs = new Set();
+        refs.langSelect.querySelectorAll('option').forEach(option => {
+            existingLangs.add(option.value);
+        });
+
         const voices = state.synth.getVoices();
-        refs.langSelect.innerHTML = '';
         
         if (voices.length === 0 && refs.langSelect.options.length === 0) {
             refs.langSelect.innerHTML = '<option>No se encontraron voces</option>';
@@ -121,10 +127,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         voices.forEach(voice => {
-            const option = document.createElement('option');
-            option.textContent = `${voice.name} (${voice.lang})`;
-            option.value = voice.lang;
-            refs.langSelect.appendChild(option);
+            // 2. Comprobar si el idioma de esta voz ya fue añadido.
+            if (!existingLangs.has(voice.lang)) {
+                const option = document.createElement('option');
+                option.textContent = `${voice.name} (${voice.lang})`;
+                option.value = voice.lang;
+                refs.langSelect.appendChild(option);
+                // 3. Añadir el nuevo idioma al set para no repetirlo con otra voz.
+                existingLangs.add(voice.lang);
+            }
         });
     };
 
@@ -191,12 +202,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ----------- Renderizado de Texto -----------
-    const renderInteractiveText = async (text) => {
+    const renderInteractiveText = async (text_data) => {
         refs.textOutput.innerHTML = '<div class="loader"></div>';
-        const words = text.split(/[\s,.;:!?]+/).filter(Boolean).map(w => w.toLowerCase());
-        const uniqueWords = [...new Set(words)];
-        let wordStatuses = {};
         
+        let words = [];
+        let uniqueWords = [];
+
+        // Determinar la lista de palabras/tokens
+        if (text_data.type === 'tokenized') {
+            words = text_data.tokens.map(w => w.toLowerCase());
+        } else if (text_data.type === 'plain') {
+            words = text_data.text.split(/[\s,.;:!?]+/).filter(Boolean).map(w => w.toLowerCase());
+        }
+        
+        uniqueWords = [...new Set(words)];
+        let wordStatuses = {};
+
         try {
             const response = await fetch('/get_vocabulary_status', {
                 method: 'POST',
@@ -206,43 +227,59 @@ document.addEventListener('DOMContentLoaded', () => {
                     target_lang: refs.outputLangSelect.value 
                 })
             });
-            
-            if (response.ok) wordStatuses = await response.json();
+            if (response.ok) {
+                wordStatuses = await response.json();
+            }
         } catch (e) {
             console.error("No se pudo obtener el estado del vocabulario:", e);
         }
         
         refs.textOutput.innerHTML = '';
-        const parts = text.split(/(\s+)/);
-        state.wordSpans = [];  // Reiniciamos el array de spans
-        
-        parts.forEach(part => {
-            const cleanPart = part.trim().toLowerCase().replace(/[.,:;!?]$/, '');
-            
-            if (cleanPart.length > 0) {
+        state.wordSpans = []; // Reiniciar el array de spans
+
+        // Renderizar basado en el tipo de texto
+        if (text_data.type === 'tokenized') {
+            text_data.tokens.forEach(token => {
                 const span = document.createElement('span');
-                span.textContent = part;
+                span.textContent = token;
                 span.onclick = () => onWordClick(span);
-                
-                // Guardamos la referencia al span
                 state.wordSpans.push(span);
-                
-                // Aplicar clases según estado
-                const status = wordStatuses[cleanPart];
+
+                const cleanToken = token.trim().toLowerCase().replace(/[.,:;!?]$/, '');
+                const status = wordStatuses[cleanToken];
                 if (status === 'aprendiendo') {
                     span.classList.add('word-learning');
                 } else if (status === 'conocida') {
                     span.classList.add('word-known');
                 } else {
-                    // Si no está en la base de datos, se considera nueva
                     span.classList.add('word-new');
                 }
-                
                 refs.textOutput.appendChild(span);
-            } else {
-                refs.textOutput.appendChild(document.createTextNode(part));
-            }
-        });
+            });
+        } else { // type === 'plain'
+            const parts = text_data.text.split(/(\s+)/);
+            parts.forEach(part => {
+                const cleanPart = part.trim().toLowerCase().replace(/[.,:;!?]$/, '');
+                if (cleanPart.length > 0) {
+                    const span = document.createElement('span');
+                    span.textContent = part;
+                    span.onclick = () => onWordClick(span);
+                    state.wordSpans.push(span);
+
+                    const status = wordStatuses[cleanPart];
+                    if (status === 'aprendiendo') {
+                        span.classList.add('word-learning');
+                    } else if (status === 'conocida') {
+                        span.classList.add('word-known');
+                    } else {
+                        span.classList.add('word-new');
+                    }
+                    refs.textOutput.appendChild(span);
+                } else {
+                    refs.textOutput.appendChild(document.createTextNode(part));
+                }
+            });
+        }
     };
 
     // ----------- Gestión de Vocabulario -----------
@@ -502,7 +539,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         stopTTS();
         
-        const textToSpeak = state.documentPages[state.currentPageIndex].text;
+        // MODIFICADO: Usar la clave 'full_text' para el TTS
+        const textToSpeak = state.documentPages[state.currentPageIndex].full_text; 
+        if (!textToSpeak) {
+            showToast("No hay texto para leer.", "error");
+            return;
+        }
+
         state.currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
         state.currentUtterance.lang = refs.langSelect.value;
         
